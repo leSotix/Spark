@@ -1,0 +1,79 @@
+services:
+  spark-master:
+    # This Bitnami build uses Python 3.11
+    image: public.ecr.aws/bitnami/spark:3.5.1
+    platform: linux/amd64
+    container_name: spark-master
+    environment:
+      - SPARK_MODE=master
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+    volumes:
+      - ./data:/data
+    networks:
+      - spark-network
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import socket; s=socket.socket(); s.settimeout(3); s.connect(('localhost', 8080)); s.close()"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  spark-worker:
+    image: public.ecr.aws/bitnami/spark:3.5.1
+    platform: linux/amd64
+    # container_name removed so we can scale!
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_WORKER_CORES=${SPARK_WORKER_CORES}
+      - SPARK_WORKER_MEMORY=${SPARK_WORKER_MEMORY}
+    volumes:
+      - ./data:/data
+    depends_on:
+      spark-master:
+        condition: service_healthy
+    networks:
+      - spark-network
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import socket; s=socket.socket(); s.settimeout(3); s.connect(('localhost', 8081)); s.close()"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  jupyter:
+    # This Jupyter build is also confirmed Python 3.11
+    image: quay.io/jupyter/pyspark-notebook:spark-3.5.1
+    platform: linux/amd64
+    container_name: jupyter-pyspark
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./notebooks:/home/jovyan/work
+      - ./data:/data
+    environment:
+      - SPARK_MASTER=spark://spark-master:7077
+      - JUPYTER_TOKEN=${JUPYTER_TOKEN}
+      # Extra insurance: force Spark to use the correct Python binary
+      - PYSPARK_PYTHON=python3
+      - PYSPARK_DRIVER_PYTHON=python3
+    networks:
+      - spark-network
+    user: root
+    depends_on:
+      spark-master:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import socket; s=socket.socket(); s.settimeout(3); s.connect(('localhost', 8888)); s.close()"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+networks:
+  spark-network:
+    driver: bridge
