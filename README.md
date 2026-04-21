@@ -2,6 +2,14 @@
 
 A local PySpark environment running on Docker, with a Jupyter notebook server for interactive development.
 
+## Browser Links
+
+| Service | URL | Purpose |
+|---|---|---|
+| Spark Master UI | http://localhost:8080 | Monitor workers, jobs, cluster status |
+| Jupyter Notebook | http://localhost:8888 | Write and run PySpark code |
+| Spark App UI | http://localhost:4040 | Live job/stage/task details (only active while a Spark app is running) |
+
 ## Stack
 
 | Service | Image | Port |
@@ -35,9 +43,6 @@ The `./data` folder is bind-mounted to `/data` inside **all three containers** (
 
 ```bash
 # Defaults already set in .env — override here if needed
-export SPARK_WORKER_CORES=2
-export SPARK_WORKER_MEMORY=2g
-export JUPYTER_TOKEN=group4
 ```
 
 ### 2  Start the cluster
@@ -61,58 +66,3 @@ docker compose up -d --scale spark-worker=2
 In Jupyter, navigate to **work → spark_transaction.ipynb** and open it.
 
 ---
-
-## Live demo — 3 commands to run in order
-
-Run these three notebook cells (or paste them into a Jupyter cell) to walk through the key Spark concepts:
-
-**Command 1 — show partition counts before and after repartitioning**
-```python
-print("BEFORE:", events.rdd.getNumPartitions())
-events_rp = events.repartition(4)
-print("AFTER :", events_rp.rdd.getNumPartitions())
-```
-
-**Command 2 — run the grouped aggregation (triggers a shuffle)**
-```python
-category_stats.show(truncate=False)
-```
-> While this runs, switch to `http://localhost:8080` → the active application → **Stages**.  
-> You will see an **Exchange** stage — that is the shuffle, where data crosses executor boundaries.
-
-**Command 3 — inspect the physical query plan**
-```python
-category_stats.explain(mode="formatted")
-```
-> Point out `BroadcastHashJoin` (products — no shuffle) vs `HashAggregate + Exchange` (groupBy — shuffle).
-
----
-
-## Notebooks
-
-### [spark_intro.ipynb](notebooks/spark_intro.ipynb)
-
-Introduces core PySpark DataFrame operations against a small in-memory employee dataset (6 rows, three departments).
-
-- **Connect** — builds a `SparkSession` pointing at `spark://spark-master:7077`
-- **Filter** — selects only Engineering employees
-- **Aggregate** — headcount and average salary per department via `groupBy`
-- **Derive** — adds an `above`/`below` column comparing each salary to a fixed median threshold
-
-### [spark_transaction.ipynb](notebooks/spark_transaction.ipynb)
-
-End-to-end clickstream analysis using the ShopStream dataset.
-
-- **Load** — reads four CSVs from `/data/raw/` into Spark DataFrames
-- **Schema** — `printSchema()` and row counts on all four tables
-- **Partitions** — `getNumPartitions()` before and after `repartition(4)`
-- **Join** — events enriched with session and product context; `F.broadcast()` used for the small products table
-- **Aggregate** — revenue, event counts, and conversion rate per product category (shuffle)
-- **explain()** — physical plan showing `BroadcastHashJoin`, `Exchange`, and `HashAggregate` nodes
-- **Write** — results saved to `/data/output/` as Parquet (columnar, compressed, splittable)
-
-### Key concept
-
-> Spark handles **processing** — distributing computation across workers.  
-> **Replication and durability** live in the storage layer beneath it (HDFS, S3, GCS, etc.).  
-> In this demo the shared `/data` bind-mount plays that role.
