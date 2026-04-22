@@ -45,7 +45,6 @@ services:
 
   jupyter:
     image: ${JUPYTER_IMAGE}
-    platform: ${PLATFORM}
     container_name: ${JUPYTER_NAME}
     ports:
       - "${JUPYTER_PORT}:8888"
@@ -62,7 +61,7 @@ services:
       spark-master:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "bash -c '< /dev/tcp/localhost/8888' || exit 1"]
+      test: ["CMD-SHELL", "pgrep -f jupyter || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 3
